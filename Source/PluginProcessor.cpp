@@ -94,9 +94,10 @@ void SishhinDSPAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,juc
     if(!message.isController()&&!message.isProgramChange())continue;
     const int slot=midiFifo.getFreeSpace();
     if(slot<=0)continue;
-    const auto range=midiFifo.prepareToWrite(1);
-    if(range.blockSize1>0){
-      midiQueue[static_cast<size_t>(range.startIndex1)]={message.getRawData()[0],
+    int start1=0, size1=0, start2=0, size2=0;
+    midiFifo.prepareToWrite(1,start1,size1,start2,size2);
+    if(size1>0){
+      midiQueue[static_cast<size_t>(start1)]={message.getRawData()[0],
         message.isController()?message.getControllerNumber():message.getProgramChangeNumber(),
         message.isController()?message.getControllerValue():0};
       midiFifo.finishedWrite(1);
@@ -110,9 +111,10 @@ void SishhinDSPAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,juc
   level.store(std::sqrt(sum/juce::jmax(1,buffer.getNumChannels())),std::memory_order_relaxed);
 }
 bool SishhinDSPAudioProcessor::takeMidi(MidiEvent& e){
-  auto r=midiFifo.prepareToRead(1);
-  if(r.blockSize1==0)return false;
-  e=midiQueue[static_cast<size_t>(r.startIndex1)];midiFifo.finishedRead(1);return true;
+  int start1=0, size1=0, start2=0, size2=0;
+  midiFifo.prepareToRead(1,start1,size1,start2,size2);
+  if(size1==0)return false;
+  e=midiQueue[static_cast<size_t>(start1)];midiFifo.finishedRead(1);return true;
 }
 float SishhinDSPAudioProcessor::getPitchHz() const {
   constexpr int window=2048;
@@ -193,7 +195,7 @@ void SishhinDSPAudioProcessor::loadIR(const juce::File& file){
   if(!file.existsAsFile())return;
   irFile=file;dsp.loadIr(file);
 }
-void SishhinDSPAudioProcessor::removeIR(){irFile={};dsp.clearIr();}
+void SishhinDSPAudioProcessor::removeIR(){irFile=juce::File{};dsp.clearIr();}
 void SishhinDSPAudioProcessor::getStateInformation(juce::MemoryBlock& out){
   auto state=apvts.copyState();state.setProperty("irFile",irFile.getFullPathName(),nullptr);
   auto xml=state.createXml();copyXmlToBinary(*xml,out);
